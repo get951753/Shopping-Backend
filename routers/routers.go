@@ -41,7 +41,7 @@ func SetupRouters(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 		})
 		//搜尋完整包含標籤的所有商品
 		router.GET("/api/products/categories", func(context *gin.Context) {
-			handlers.GetProductsFromCategoriesHandler(context, db)
+			handlers.GetProductsFromCategoriesHandler(context, db, rdb)
 		})
 		//查詢商品詳細資料
 		router.GET("/api/product/:productID", func(context *gin.Context) {

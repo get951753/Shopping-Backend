@@ -67,13 +67,13 @@ func GenerateToken(userID uint, role string, expTime int64) (string, error) {
 }
 
 // 驗證JWT Token並回傳UserID
-func VerifyToken(tokenString string, db *gorm.DB) (uint, string, error) {
+func VerifyToken(tokenString *string, db *gorm.DB) (uint, string, error) {
 	publicKey, err := loadPublicKey()
 	if err != nil {
 		return 0, "", err
 	}
 
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(*tokenString, func(token *jwt.Token) (interface{}, error) {
 		return publicKey, nil
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func VerifyToken(tokenString string, db *gorm.DB) (uint, string, error) {
 
 	//從資料庫檢查Token是否刪除
 	var loginToken models.LoginToken
-	err = db.Where("token = ?", tokenString).First(&loginToken).Error
+	err = db.Where("token = ?", *tokenString).First(&loginToken).Error
 	if err != nil {
 		log.Println(err)
 		return 0, "", err

@@ -12,6 +12,13 @@ import (
 	"strconv"
 )
 
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 // 查詢商品列表
 func GetProductListHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	limit := c.DefaultQuery("limit", "10")
@@ -41,7 +48,7 @@ func GetProductListHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	if err != nil || rdb.ZCard(c, "products").Val() == 0 {
 		log.Println("err")
 		var products []models.Product
-		err = db.Find(&products).Error
+		err = db.Preload("Categories").Find(&products).Error
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "無法讀取商品列表",
@@ -118,6 +125,113 @@ func GetProductListHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	})
 }
 
+// 搜尋完整包含標籤的所有商品
+func GetProductsFromCategoriesHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
+	limit := c.DefaultQuery("limit", "10")
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "查詢數量輸入錯誤",
+			"error":   err.Error(),
+		})
+	}
+	//限制最高查詢數量為50
+	if limitInt > 50 {
+		limitInt = 50
+	}
+
+	offset := c.DefaultQuery("offset", "0")
+	offsetInt, err := strconv.Atoi(offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "offset輸入錯誤",
+			"error":   err.Error(),
+		})
+	}
+
+	var categoriesReq []struct {
+		CategoryID uint `json:"categoryID" binding:"required"`
+	}
+	err = c.ShouldBindJSON(&categoriesReq)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "綁定請求資料錯誤",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	redisProducts, err := rdb.ZRange(c, "products", 0, -1).Result()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "無法取得商品列表",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	//遍歷從Redis讀出的商品列表，找出含有所有標籤的商品
+	var productsData []gin.H
+	for _, redisProduct := range redisProducts {
+		var productUnmarshal models.Product
+		err = json.Unmarshal([]byte(redisProduct), &productUnmarshal)
+		if err != nil {
+			fmt.Printf("無法反序列化商品資料: %v\n", err)
+			continue
+		}
+
+		hasALLTags := true
+
+		for _, categoryReq := range categoriesReq {
+			found := false
+			for _, productCategory := range productUnmarshal.Categories {
+				if productCategory.ID == categoryReq.CategoryID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				hasALLTags = false
+				break
+			}
+		}
+
+		if hasALLTags == true {
+			categoriesData := make([]gin.H, len(productUnmarshal.Categories))
+			for i, category := range productUnmarshal.Categories {
+				categoriesData[i] = gin.H{
+					"name": category.Name,
+					"ID":   category.ID,
+				}
+			}
+			productsData = append(productsData, gin.H{
+				"name":       productUnmarshal.Name,
+				"price":      productUnmarshal.Price,
+				"stock":      productUnmarshal.Stock,
+				"imageURL":   productUnmarshal.ImageURL,
+				"Categories": categoriesData,
+			})
+		}
+	}
+
+	totalCount := len(productsData)
+
+	//預防offset跟limit超出搜尋結果切片
+	if offsetInt >= totalCount {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message":    "offset超過商品數量",
+			"totalCount": len(productsData),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "成功讀取商品列表",
+		"products":   productsData[offsetInt:min(offsetInt+limitInt, totalCount)],
+		"totalCount": len(productsData),
+	})
+}
+
 // 查詢商品詳細資料
 func GetProductDataHandler(c *gin.Context, db *gorm.DB) {
 	productID := c.Param("productID")
@@ -167,81 +281,5 @@ func GetCategoryListHandler(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "成功讀取商品標籤列表",
 		"products": categories,
-	})
-}
-
-// 搜尋完整包含標籤的所有商品
-func GetProductsFromCategoriesHandler(c *gin.Context, db *gorm.DB) {
-	limit := c.DefaultQuery("limit", "10")
-	limitInt, err := strconv.Atoi(limit)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "查詢數量輸入錯誤",
-			"error":   err.Error(),
-		})
-	}
-	//限制最高查詢數量為50
-	if limitInt > 50 {
-		limitInt = 50
-	}
-
-	var categoriesReq []struct {
-		CategoryID uint `json:"categoryID" binding:"required"`
-	}
-	err = c.ShouldBindJSON(&categoriesReq)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "綁定請求資料錯誤",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	//將商品標籤請求轉為切片
-	var categoryIDs []uint
-	for _, category := range categoriesReq {
-		categoryIDs = append(categoryIDs, category.CategoryID)
-	}
-
-	//搜尋完整包含標籤的商品
-	var products []models.Product
-	err = db.
-		Joins("JOIN category_products cp ON cp.product_id = products.id").
-		Where("cp.category_id IN ?", categoryIDs).
-		Group("products.id").
-		Having("COUNT(DISTINCT cp.category_id) = ?", len(categoryIDs)).
-		Preload("Categories").
-		Limit(limitInt).
-		Find(&products).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "無法讀取商品列表",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	//整理回傳資料
-	var productData []gin.H
-	for _, product := range products {
-		categoriesData := make([]gin.H, len(product.Categories))
-		for i, category := range product.Categories {
-			categoriesData[i] = gin.H{
-				"name": category.Name,
-				"ID":   category.ID,
-			}
-		}
-		productData = append(productData, gin.H{
-			"name":       product.Name,
-			"price":      product.Price,
-			"stock":      product.Stock,
-			"imageURL":   product.ImageURL,
-			"Categories": categoriesData,
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "成功讀取商品列表",
-		"products": productData,
 	})
 }

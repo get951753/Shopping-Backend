@@ -12,18 +12,18 @@
 
 **以下路由不須登入即可請求，但仍然會檢查登入狀況。**
 
-| 路由                               | 簡介                         |
-|----------------------------------|-------------------------------|
-| **GET** /api/products            | 查詢商品列表 (使用Redis加速)      |
-| **GET** /api/products/categories | 搜尋完整包含標籤的所有商品         |
-| **GET** /api/product/:productID  | 查詢商品詳細資料                 |
-| **POST** /api/register           | 註冊帳號                        |
-| **POST** /api/login              | 登入帳號                        |
-| **POST** /api/carts/add          | 新增商品至購物車                 |
-| **POST** /api/carts/update       | 更新購物車商品數量               |
-| **DELETE** /api/carts/:productID | 刪除購物車商品                  |
-| **GET** /api/carts               | 查詢購物車商品                  |
-| **DELETE** /api/carts            | 清除購物車商品                  |
+| 路由                               | 簡介                                        |
+|----------------------------------|----------------------------------------------|
+| **GET** /api/products            | 查詢商品列表 (使用Redis加速)                     |
+| **GET** /api/products/categories | 搜尋完整包含標籤的所有商品 (使用Redis加速)         |
+| **GET** /api/product/:productID  | 查詢商品詳細資料                                |
+| **POST** /api/register           | 註冊帳號                                       |
+| **POST** /api/login              | 登入帳號                                       |
+| **POST** /api/carts/add          | 新增商品至購物車                                |
+| **POST** /api/carts/update       | 更新購物車商品數量                              |
+| **DELETE** /api/carts/:productID | 刪除購物車商品                                 |
+| **GET** /api/carts               | 查詢購物車商品                                 |
+| **DELETE** /api/carts            | 清除購物車商品                                 |
 
 **以下路由須要登入才能請求。**
 

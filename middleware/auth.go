@@ -20,7 +20,7 @@ func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		//如Token不合法或錯誤則回傳空Authorization
-		userID, role, err := jwt.VerifyToken(token, db)
+		userID, role, err := jwt.VerifyToken(&token, db)
 		if err != nil {
 			log.Printf("無法驗證Token: %v\n", err)
 			c.Header("Authorization", "")
