@@ -55,7 +55,7 @@ func GetUserListHandler(c *gin.Context, db *gorm.DB) {
 
 	//檢查使用者列表是否為空
 	if len(userList) == 0 {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"message": "使用者列表為空",
 		})
 		return
@@ -87,7 +87,7 @@ func GetProductAllDataHandler(c *gin.Context, db *gorm.DB) {
 	})
 }
 
-func UploadImageHandler(c *gin.Context, db *gorm.DB) {
+func UploadImageHandler(c *gin.Context) {
 	file, err := c.FormFile("image")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -200,6 +200,12 @@ func CreateProductHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	}
 
 	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "開啟資料庫事務失敗",
@@ -332,6 +338,12 @@ func UpdateProductHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	}
 
 	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "開啟資料庫事務失敗",
@@ -350,36 +362,11 @@ func UpdateProductHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 		return
 	}
 
-	productJSON, err := json.Marshal(product)
+	err, msg := UpdateProductToRedis(c, rdb, &product)
 	if err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "無法序列化商品資料",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	score := strconv.Itoa(int(product.ID))
-
-	err = rdb.ZRemRangeByScore(c, "products", score, score).Err()
-	if err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "無法將商品資料從Redis刪除",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	err = rdb.ZAdd(c, "products", redis.Z{
-		Score:  float64(product.ID),
-		Member: productJSON,
-	}).Err()
-	if err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "無法將商品資料加入Redis",
+			"message": msg,
 			"error":   err.Error(),
 		})
 		return
@@ -412,6 +399,12 @@ func DeleteProductHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	var product models.Product
 
 	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "開啟資料庫事務失敗",
@@ -423,6 +416,12 @@ func DeleteProductHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	err := tx.Preload("Categories").First(&product, productID).Error
 	if err != nil {
 		tx.Rollback()
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "查無此商品",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "查找此商品失敗",
 			"error":   err.Error(),
@@ -450,22 +449,21 @@ func DeleteProductHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 		return
 	}
 
-	score := strconv.Itoa(int(product.ID))
-
-	err = rdb.ZRemRangeByScore(c, "products", score, score).Err()
-	if err != nil {
+	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "無法將商品資料從Redis刪除",
+			"message": "提交事務失敗",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
+	score := strconv.Itoa(int(product.ID))
+
+	err = rdb.ZRemRangeByScore(c, "products", score, score).Err()
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "提交事務失敗",
+			"message": "已從資料庫刪除商品資料，但從Redis刪除商品失敗",
 			"error":   err.Error(),
 		})
 		return

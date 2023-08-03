@@ -36,48 +36,48 @@ func SetupRouters(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	router.Use(middleware.AuthMiddleware(db))
 	{
 		//查詢商品列表
-		router.GET("/api/products", func(context *gin.Context) {
+		router.GET("/api/v1/products", func(context *gin.Context) {
 			handlers.GetProductListHandler(context, db, rdb)
 		})
 		//搜尋完整包含標籤的所有商品
-		router.GET("/api/products/categories", func(context *gin.Context) {
+		router.GET("/api/v1/products/categories", func(context *gin.Context) {
 			handlers.GetProductsFromCategoriesHandler(context, db, rdb)
 		})
 		//查詢商品詳細資料
-		router.GET("/api/product/:productID", func(context *gin.Context) {
+		router.GET("/api/v1/products/:productID", func(context *gin.Context) {
 			handlers.GetProductDataHandler(context, db)
 		})
 		//註冊帳號
-		router.POST("/api/register", func(context *gin.Context) {
+		router.POST("/api/v1/register", func(context *gin.Context) {
 			handlers.RegisterHandler(context, db)
 		})
 		//登入帳號
-		router.POST("/api/login", func(context *gin.Context) {
+		router.POST("/api/v1/login", func(context *gin.Context) {
 			handlers.LoginHandler(context, db)
 		})
 		//新增商品至購物車
-		router.POST("/api/carts/add", func(context *gin.Context) {
+		router.POST("/api/v1/carts/add", func(context *gin.Context) {
 			handlers.AddToCartHandler(context, db)
 		})
 		//更新購物車商品數量
-		router.POST("/api/carts/update", func(context *gin.Context) {
+		router.POST("/api/v1/carts/update", func(context *gin.Context) {
 			handlers.UpdateCartItemQuantityHandler(context, db)
 		})
 		//刪除購物車商品
-		router.DELETE("/api/carts/:productID", func(context *gin.Context) {
+		router.DELETE("/api/v1/carts/:productID", func(context *gin.Context) {
 			handlers.DeleteCartItemHandler(context, db)
 		})
 		//查詢購物車商品
-		router.GET("/api/carts", func(context *gin.Context) {
+		router.GET("/api/v1/carts", func(context *gin.Context) {
 			handlers.GetCartHandler(context, db)
 		})
 		//清除購物車商品
-		router.DELETE("/api/carts", func(context *gin.Context) {
+		router.DELETE("/api/v1/carts", func(context *gin.Context) {
 			handlers.ClearCartHandler(context, db)
 		})
 
 		////需要登入，使用中間件檢查是否登入
-		loginRequired := router.Group("/api/user")
+		loginRequired := router.Group("/api/v1/user")
 		loginRequired.Use(middleware.CheckLoginMiddleware())
 		{
 			//查詢使用者資料
@@ -93,7 +93,7 @@ func SetupRouters(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 				handlers.MergeCartHandler(context, db)
 			})
 			//送出訂單並清除購物車內對應商品
-			loginRequired.POST("/order", func(context *gin.Context) {
+			loginRequired.POST("/orders", func(context *gin.Context) {
 				handlers.SendOrderHandler(context, db, rdb)
 			})
 			//查詢訂單列表
@@ -101,7 +101,7 @@ func SetupRouters(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 				handlers.GetOrderListHandler(context, db)
 			})
 			//查詢訂單詳細資訊
-			loginRequired.GET("/order/:orderID", func(context *gin.Context) {
+			loginRequired.GET("/orders/:orderID", func(context *gin.Context) {
 				handlers.GetOrderDataHandler(context, db)
 			})
 			//登出
@@ -111,31 +111,31 @@ func SetupRouters(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 		}
 
 		////需要admin身分，使用中間件檢查是否登入及admin權限
-		adminRequired := router.Group("/api/admin")
+		adminRequired := router.Group("/api/v1/admin")
 		adminRequired.Use(middleware.CheckLoginMiddleware(), middleware.CheckAdminPermissionMiddleware())
 		{
 			//查詢使用者列表
 			adminRequired.GET("/users", func(context *gin.Context) {
 				handlers.GetUserListHandler(context, db)
 			})
-			//查詢商品所有資料
-			adminRequired.GET("/product/:productID", func(context *gin.Context) {
-				handlers.GetProductAllDataHandler(context, db)
-			})
 			//上傳商品圖片
 			adminRequired.POST("/image", func(context *gin.Context) {
-				handlers.UploadImageHandler(context, db)
+				handlers.UploadImageHandler(context)
+			})
+			//查詢商品完整資料
+			adminRequired.GET("/products/:productID", func(context *gin.Context) {
+				handlers.GetProductAllDataHandler(context, db)
 			})
 			//新增商品
-			adminRequired.POST("/product", func(context *gin.Context) {
+			adminRequired.POST("/products", func(context *gin.Context) {
 				handlers.CreateProductHandler(context, db, rdb)
 			})
 			//修改商品
-			adminRequired.PATCH("/product/:productID", func(context *gin.Context) {
+			adminRequired.PATCH("/products/:productID", func(context *gin.Context) {
 				handlers.UpdateProductHandler(context, db, rdb)
 			})
 			//刪除商品
-			adminRequired.DELETE("/product/:productID", func(context *gin.Context) {
+			adminRequired.DELETE("/products/:productID", func(context *gin.Context) {
 				handlers.DeleteProductHandler(context, db, rdb)
 			})
 			//查詢商品標籤列表

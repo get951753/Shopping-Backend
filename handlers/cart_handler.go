@@ -248,7 +248,7 @@ func UpdateCartItemQuantityHandler(c *gin.Context, db *gorm.DB) {
 	return
 }
 
-//刪除購物車商品
+// 刪除購物車商品
 func DeleteCartItemHandler(c *gin.Context, db *gorm.DB) {
 	productID := c.Param("productID")
 
@@ -295,7 +295,7 @@ func DeleteCartItemHandler(c *gin.Context, db *gorm.DB) {
 		Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusBadRequest, gin.H{
+			c.JSON(http.StatusNotFound, gin.H{
 				"error": "購物車沒有此商品",
 			})
 			return

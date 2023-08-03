@@ -19,6 +19,66 @@ func min(x, y int) int {
 	return y
 }
 
+// 重新將商品列表加入Redis
+func ReAddAllProductsToRedis(c *gin.Context, db *gorm.DB, rdb *redis.Client) (err error, message string) {
+	var products []models.Product
+	err = db.Preload("Categories").Find(&products).Error
+	if err != nil {
+		return err, "無法讀取商品列表"
+	}
+
+	pipe := rdb.TxPipeline()
+
+	pipe.Del(c, "products")
+
+	var zProducts = make([]redis.Z, len(products))
+	for _, product := range products {
+		productJSON, err := json.Marshal(product)
+		if err != nil {
+			fmt.Printf("無法序列化商品資料: %v\n", err)
+			continue
+		}
+
+		zProducts = append(zProducts, redis.Z{
+			Score:  float64(product.ID),
+			Member: productJSON,
+		})
+	}
+
+	pipe.ZAdd(c, "products", zProducts...)
+
+	_, err = pipe.Exec(c)
+	if err != nil {
+		return err, "無法重新將商品列表加入Redis"
+	}
+
+	return nil, ""
+}
+
+func UpdateProductToRedis(c *gin.Context, rdb *redis.Client, product *models.Product) (err error, msg string) {
+	productJSON, err := json.Marshal(product)
+	if err != nil {
+		return err, "無法序列化商品資料"
+	}
+
+	score := strconv.Itoa(int(product.ID))
+
+	pipe := rdb.TxPipeline()
+
+	pipe.ZRemRangeByScore(c, "products", score, score)
+	pipe.ZAdd(c, "products", redis.Z{
+		Score:  float64(product.ID),
+		Member: productJSON,
+	})
+
+	_, err = pipe.Exec(c)
+	if err != nil {
+		return err, "無法更新商品至Redis"
+	}
+
+	return nil, ""
+}
+
 // 查詢商品列表
 func GetProductListHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	limit := c.DefaultQuery("limit", "10")
@@ -46,34 +106,15 @@ func GetProductListHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	//嘗試從Redis讀取商品列表，如失敗則從資料庫讀取並儲存至Redis
 	redisProducts, err := rdb.ZRange(c, "products", int64(offsetInt), int64(offsetInt+limitInt-1)).Result()
 	if err != nil || rdb.ZCard(c, "products").Val() == 0 {
-		log.Println("err")
-		var products []models.Product
-		err = db.Preload("Categories").Find(&products).Error
+		log.Println("Redis error: ", err)
+
+		err, message := ReAddAllProductsToRedis(c, db, rdb)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": "無法讀取商品列表",
+				"message": message,
 				"error":   err.Error(),
 			})
 			return
-		}
-
-		rdb.Del(c, "products")
-
-		for _, product := range products {
-			productJSON, err := json.Marshal(product)
-			if err != nil {
-				fmt.Printf("無法序列化商品資料: %v\n", err)
-				continue
-			}
-
-			err = rdb.ZAdd(c, "products", redis.Z{
-				Score:  float64(product.ID),
-				Member: productJSON,
-			}).Err()
-			if err != nil {
-				fmt.Printf("無法將商品資料加入Redis: %v\n", err)
-				continue
-			}
 		}
 
 		//再次嘗試從Redis讀取商品列表
@@ -162,12 +203,27 @@ func GetProductsFromCategoriesHandler(c *gin.Context, db *gorm.DB, rdb *redis.Cl
 	}
 
 	redisProducts, err := rdb.ZRange(c, "products", 0, -1).Result()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "無法取得商品列表",
-			"error":   err.Error(),
-		})
-		return
+	if err != nil || rdb.ZCard(c, "products").Val() == 0 {
+		log.Println("Redis error: ", err)
+
+		err, message := ReAddAllProductsToRedis(c, db, rdb)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": message,
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		//再次嘗試從Redis讀取商品列表
+		redisProducts, err = rdb.ZRange(c, "products", 0, -1).Result()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "無法從Redis讀取商品列表",
+				"error":   err.Error(),
+			})
+			return
+		}
 	}
 
 	//遍歷從Redis讀出的商品列表，找出含有所有標籤的商品

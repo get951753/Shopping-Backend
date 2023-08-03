@@ -10,45 +10,45 @@
 
 ## 路由簡介
 
-**以下路由不須登入即可請求，但仍然會檢查登入狀況。**
+**以下路由不須登入即可請求，但仍然會檢查登入狀況並回傳。**
 
 | 路由                               | 簡介                                        |
 |----------------------------------|----------------------------------------------|
-| **GET** /api/products            | 查詢商品列表 (使用Redis加速)                     |
-| **GET** /api/products/categories | 搜尋完整包含標籤的所有商品 (使用Redis加速)         |
-| **GET** /api/product/:productID  | 查詢商品詳細資料                                |
-| **POST** /api/register           | 註冊帳號                                       |
-| **POST** /api/login              | 登入帳號                                       |
-| **POST** /api/carts/add          | 新增商品至購物車                                |
-| **POST** /api/carts/update       | 更新購物車商品數量                              |
-| **DELETE** /api/carts/:productID | 刪除購物車商品                                 |
-| **GET** /api/carts               | 查詢購物車商品                                 |
-| **DELETE** /api/carts            | 清除購物車商品                                 |
+| **GET** /api/v1/products            | 查詢商品列表 (使用Redis加速)                     |
+| **GET** /api/v1/products/categories | 搜尋完整包含標籤的所有商品 (使用Redis加速)         |
+| **GET** /api/v1/products/:productID | 查詢商品詳細資料                                |
+| **POST** /api/v1/register           | 註冊帳號                                       |
+| **POST** /api/v1/login              | 登入帳號                                       |
+| **POST** /api/v1/carts/add          | 新增商品至購物車                                |
+| **POST** /api/v1/carts/update       | 更新購物車商品數量                              |
+| **DELETE** /api/v1/carts/:productID | 刪除購物車商品                                 |
+| **GET** /api/v1/carts               | 查詢購物車商品                                 |
+| **DELETE** /api/v1/carts            | 清除購物車商品                                 |
 
 **以下路由須要登入才能請求。**
 
-| 路由                      | 簡介                                  |
-|-------------------------|----------------------------------------|
-| **GET** /profile        | 查詢使用者資料                            |
-| **PATCH** /profile/edit | 修改使用者資料                            |
-| **POST** /carts/merge   | 合併匿名和使用者購物車(登入或註冊後呼叫)      |
-| **POST** /order         | 送出訂單並清除購物車內對應商品               |
-| **GET** /orders         | 查詢訂單列表                              |
-| **GET** /order/:orderID | 查詢訂單詳細資訊                           |
-| **POST** /logout        | 登出                                     |
+| 路由                                | 簡介                                  |
+|-----------------------------------|----------------------------------------|
+| **GET** /api/v1/user/profile         | 查詢使用者資料                            |
+| **PATCH** /api/v1/user/profile/edit  | 修改使用者資料                            |
+| **POST** /api/v1/user/carts/merge    | 合併匿名和使用者購物車(登入或註冊後呼叫)      |
+| **POST** /api/v1/user/orders         | 送出訂單並清除購物車內對應商品               |
+| **GET** /api/v1/user/orders          | 查詢訂單列表                              |
+| **GET** /api/v1/user/orders/:orderID | 查詢訂單詳細資訊                           |
+| **POST** /api/v1/user/logout         | 登出                                     |
 
 **以下路由須要登入admin身分才能請求。**
 
-| 路由                                 | 簡介                                    |
-|------------------------------------|-----------------------------------------|
-| **GET** /users                     | 查詢使用者列表                             |
-| **GET** /product/:productID        | 查詢商品所有資料                            |
-| **POST** /image                    | 上傳商品圖片                               |
-| **POST** /product                  | 新增商品                                  |
-| **PATCH** /product/:productID      | 修改商品                                  |
-| **DELETE** /product/:productID     | 刪除商品                                  |
-| **GET** /categories                | 查詢商品標籤列表                            |
-| **DELETE** /categories/:categoryID | 刪除商品標籤                               |
+| 路由                                           | 簡介                                    |
+|----------------------------------------------|-----------------------------------------|
+| **GET** /api/v1/admin/users                     | 查詢使用者列表                             |
+| **POST** /api/v1/admin/image                    | 上傳商品圖片                               |
+| **GET** /api/v1/admin/products/:productID       | 查詢商品所有資料                            |
+| **POST** /api/v1/admin/products                 | 新增商品                                  |
+| **PATCH** /api/v1/admin/products/:productID     | 修改商品                                  |
+| **DELETE** /api/v1/admin/products/:productID    | 刪除商品                                  |
+| **GET** /api/v1/admin/categories                | 查詢商品標籤列表                            |
+| **DELETE** /api/v1/admin/categories/:categoryID | 刪除商品標籤                               |
 
 
 ## 執行前的設定

@@ -2,13 +2,11 @@ package handlers
 
 import (
 	"Backend/models"
-	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 func SendOrderHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
@@ -50,6 +48,19 @@ func SendOrderHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 	totalPrice := uint(0)
 
 	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "開啟資料庫事務失敗",
+			"error":   tx.Error.Error(),
+		})
+		return
+	}
 
 	for _, orderItem := range orderReq.OrderItems {
 		var product models.Product
@@ -84,37 +95,12 @@ func SendOrderHandler(c *gin.Context, db *gorm.DB, rdb *redis.Client) {
 			return
 		}
 
-		productJSON, err := json.Marshal(product)
+		err, msg := UpdateProductToRedis(c, rdb, &product)
 		if err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": "無法序列化商品資料",
+				"message": msg,
 				"error":   err.Error(),
-			})
-			return
-		}
-
-		score := strconv.Itoa(int(product.ID))
-
-		err = rdb.ZRemRangeByScore(c, "products", score, score).Err()
-		if err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": "無法將商品資料從Redis刪除",
-				"error":   err,
-			})
-			return
-		}
-
-		err = rdb.ZAdd(c, "products", redis.Z{
-			Score:  float64(product.ID),
-			Member: productJSON,
-		}).Err()
-		if err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": "無法更新Redis商品資料",
-				"error":   err,
 			})
 			return
 		}
